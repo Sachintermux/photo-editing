@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, FileText, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Download, ArrowRight } from 'lucide-react';
 import { usePhotoStore } from '../../store/usePhotoStore';
 import { DPI, ExportFormat } from '../../types';
 import { mmToPixels } from '../../utils/unitConverter';

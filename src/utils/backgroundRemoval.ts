@@ -23,7 +23,7 @@ export const removeBackgroundAI = async (
           progress: percentage
         });
       },
-      model: 'medium', // optimal balance of speed and accuracy
+      model: 'isnet_fp16', // optimal balance of speed and accuracy
       output: {
         format: 'image/png',
         quality: 0.95

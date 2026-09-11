@@ -6,7 +6,7 @@ import { fromMm } from '../../utils/unitConverter';
 import { ResolutionAlert } from '../common/ResolutionAlert';
 
 export const SizePanel: React.FC = () => {
-  const { selectedPreset, setPreset, customWidth, customHeight, unit, setCustomSize, crop, dpi } =
+const { selectedPreset, setPreset, unit, setCustomSize, crop, dpi } =
     usePhotoStore();
 
   const [localW, setLocalW] = useState(fromMm(selectedPreset.widthMm, unit).toFixed(1));

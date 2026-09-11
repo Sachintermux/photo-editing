@@ -23,9 +23,7 @@ export const applyLightingAdjustments = (
   height: number,
   adjustments: LightingAdjustments
 ) => {
-  const isDefault = Object.entries(adjustments).every(([key, val]) => {
-    return val === 0;
-  });
+ const isDefault = Object.values(adjustments).every((val) => val === 0);
   if (isDefault) return;
 
   const imgData = ctx.getImageData(0, 0, width, height);
