@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-// import { Download, FileText, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Download, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { usePhotoStore } from '../../store/usePhotoStore';
 import { DPI, ExportFormat } from '../../types';
 import { PAGE_SIZES } from '../../constants/pageSizes';
@@ -23,7 +23,7 @@ export const LayoutExportModal: React.FC = () => {
 
   const [format, setFormat] = useState<ExportFormat>('pdf');
   const [exportDpi, setExportDpi] = useState<DPI>(300);
-const quality = 0.98;
+  const quality = 0.98;
   const [isExporting, setIsExporting] = useState(false);
 
   const targetPagePreset = PAGE_SIZES.find((p) => p.id === layout.pageSizeId) || PAGE_SIZES[0];
