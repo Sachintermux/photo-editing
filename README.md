@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # PhotoCraft Studio 📸
 
 A client-side web application for editing photos, resizing them to international passport & print standards, and automatically arranging duplicate copies on printable sheets (A4, 4x6", Letter, etc.) with cut marks and 100% true-to-scale PDF/image exports.
@@ -31,3 +32,6 @@ A client-side web application for editing photos, resizing them to international
 ### 1. Install Dependencies
 ```bash
 npm install
+=======
+# photo-editing
+>>>>>>> 9b845adef44ec448a2e0149ca812904d3b044964
