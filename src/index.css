@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Disable pull-to-refresh & rubber-banding on mobile for smooth canvas interactions */
+/* Supports dark mode class toggle across Tailwind v3 & v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 html, body {
   overscroll-behavior-y: contain;
   touch-action: pan-x pan-y;
