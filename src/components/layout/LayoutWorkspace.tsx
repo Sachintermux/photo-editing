@@ -20,7 +20,7 @@ export const LayoutWorkspace: React.FC = () => {
   } = usePhotoStore();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [zoom, setZoom] = useState(0.7);
+  const [zoom, setZoom] = useState(0.2);
 
   const targetPagePreset = PAGE_SIZES.find((p) => p.id === layout.pageSizeId) || PAGE_SIZES[0];
   const pageWidthMm =
@@ -107,7 +107,7 @@ export const LayoutWorkspace: React.FC = () => {
       {/* Zoom controls floating bar */}
       <div className="absolute top-4 right-4 z-30 flex items-center bg-zinc-900/80 backdrop-blur border border-zinc-700/60 rounded-lg p-1 space-x-1 shadow-lg">
         <button
-          onClick={() => setZoom((z) => Math.max(0.3, z - 0.1))}
+          onClick={() => setZoom((z) => Math.max(0.05, z - 0.05))}
           className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded"
         >
           <ZoomOut className="w-4 h-4" />
@@ -116,13 +116,13 @@ export const LayoutWorkspace: React.FC = () => {
           {Math.round(zoom * 100)}%
         </span>
         <button
-          onClick={() => setZoom((z) => Math.min(1.8, z + 0.1))}
+          onClick={() => setZoom((z) => Math.min(1.8, z + 0.05))}
           className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
         <button
-          onClick={() => setZoom(0.7)}
+          onClick={() => setZoom(0.3)}
           className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded"
         >
           <Maximize2 className="w-3.5 h-3.5" />

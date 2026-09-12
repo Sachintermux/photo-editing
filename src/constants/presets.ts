@@ -2,6 +2,14 @@ import { PhotoPreset } from '../types';
 
 export const PHOTO_PRESETS: PhotoPreset[] = [
   {
+    id: 'passport-26x34',
+    name: 'Standard Passport (26 x 34 mm) India',
+    category: 'passport',
+    widthMm: 26,
+    heightMm: 34,
+    description: 'India'
+  },
+  {
     id: 'passport-35-45',
     name: 'Standard Passport (35 x 45 mm)',
     category: 'passport',

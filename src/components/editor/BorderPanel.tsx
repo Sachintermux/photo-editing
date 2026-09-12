@@ -47,7 +47,7 @@ export const BorderPanel: React.FC = () => {
             </div>
             <input
               type="range"
-              min={0.2}
+              min={0.1}
               max={5}
               step={0.1}
               value={border.widthMm}
