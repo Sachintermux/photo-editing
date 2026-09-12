@@ -12,6 +12,7 @@ import {
 import { DEFAULT_PRESET } from '../constants/presets';
 import { DEFAULT_PAGE_SIZE } from '../constants/pageSizes';
 import { DEFAULT_LIGHTING } from '../utils/imageFilters';
+import { getTransformedDimensions } from '../utils/exportHelpers';
 
 export interface EditorSnapshot {
   crop: CropRect;
@@ -24,11 +25,9 @@ export interface EditorSnapshot {
 }
 
 interface PhotoStoreState {
-  // Navigation
   currentStep: AppStep;
   setStep: (step: AppStep) => void;
 
-  // Image Source
   originalImage: HTMLImageElement | null;
   imageSrc: string | null;
   isAiRemovingBg: boolean;
@@ -37,7 +36,6 @@ interface PhotoStoreState {
   setImage: (img: HTMLImageElement, src: string) => void;
   resetProject: () => void;
 
-  // Preset & Sizing
   selectedPreset: PhotoPreset;
   customWidth: number;
   customHeight: number;
@@ -47,42 +45,71 @@ interface PhotoStoreState {
   setCustomSize: (w: number, h: number, unit: Unit) => void;
   setDpi: (dpi: DPI) => void;
 
-  // Transformations
   crop: CropRect;
   rotation: number;
   flipH: boolean;
   flipV: boolean;
   setCrop: (crop: CropRect) => void;
-  rotate90: (direction: 'cw' | 'ccw') => void;
+  rotate90: (direction?: 'cw' | 'ccw') => void;
   setRotation: (deg: number) => void;
   toggleFlipH: () => void;
   toggleFlipV: () => void;
   resetTransform: () => void;
 
-  // Lighting Adjustments
   adjustments: LightingAdjustments;
   setAdjustment: (key: keyof LightingAdjustments, value: number) => void;
   setAllAdjustments: (adj: LightingAdjustments) => void;
   resetAdjustments: () => void;
 
-  // Background & Borders
   backgroundColor: string;
   border: BorderSettings;
   setBackgroundColor: (color: string) => void;
   setBorder: (border: Partial<BorderSettings>) => void;
   setIsAiRemovingBg: (val: boolean, status?: string, progress?: number) => void;
 
-  // Layout Sheet Settings
   layout: LayoutSettings;
   setLayout: (settings: Partial<LayoutSettings>) => void;
 
-  // Undo / Redo History
   history: EditorSnapshot[];
   future: EditorSnapshot[];
   undo: () => void;
   redo: () => void;
   pushHistorySnapshot: () => void;
 }
+
+// Adjusts crop rectangle to remain within valid transformed canvas bounds
+const fitCropToBounds = (
+  currentCrop: CropRect,
+  boundsW: number,
+  boundsH: number,
+  aspect: number
+): CropRect => {
+  let w = currentCrop.width;
+  let h = w / aspect;
+
+  if (w > boundsW) {
+    w = boundsW;
+    h = w / aspect;
+  }
+  if (h > boundsH) {
+    h = boundsH;
+    w = h * aspect;
+  }
+
+  if (w <= 0 || h <= 0 || isNaN(w) || isNaN(h)) {
+    w = boundsW * 0.8;
+    h = w / aspect;
+    if (h > boundsH) {
+      h = boundsH * 0.8;
+      w = h * aspect;
+    }
+  }
+
+  const x = Math.max(0, Math.min(currentCrop.x, boundsW - w));
+  const y = Math.max(0, Math.min(currentCrop.y, boundsH - h));
+
+  return { x, y, width: w, height: h };
+};
 
 export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   currentStep: 'upload',
@@ -93,21 +120,18 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   isAiRemovingBg: false,
   bgRemovalProgress: 0,
   bgRemovalStatus: '',
-  setImage: (img, src) => {
-    // Default crop rectangle: centered rectangle with target aspect ratio
-    const imgW = img.naturalWidth;
-    const imgH = img.naturalHeight;
-    const targetAspect = DEFAULT_PRESET.widthMm / DEFAULT_PRESET.heightMm;
 
-    let cW = imgW;
-    let cH = imgW / targetAspect;
-    if (cH > imgH) {
-      cH = imgH;
-      cW = imgH * targetAspect;
+  setImage: (img, src) => {
+    const targetAspect = DEFAULT_PRESET.widthMm / DEFAULT_PRESET.heightMm;
+    let cW = img.naturalWidth * 0.85;
+    let cH = cW / targetAspect;
+    if (cH > img.naturalHeight) {
+      cH = img.naturalHeight * 0.85;
+      cW = cH * targetAspect;
     }
 
-    const cX = (imgW - cW) / 2;
-    const cY = (imgH - cH) / 2;
+    const cX = (img.naturalWidth - cW) / 2;
+    const cY = (img.naturalHeight - cH) / 2;
 
     set({
       originalImage: img,
@@ -141,34 +165,23 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   customHeight: 45,
   unit: 'mm',
   dpi: 300,
+
   setPreset: (preset) => {
-    const { originalImage, crop } = get();
+    const { originalImage, crop, rotation } = get();
     if (!originalImage) {
       set({ selectedPreset: preset });
       return;
     }
 
-    // Adapt crop box to new aspect ratio without exceeding image bounds
-    const targetAspect = preset.widthMm / preset.heightMm;
-    let newW = crop.width;
-    let newH = crop.width / targetAspect;
+    const bounds = getTransformedDimensions(
+      originalImage.naturalWidth,
+      originalImage.naturalHeight,
+      rotation
+    );
+    const aspect = preset.widthMm / preset.heightMm;
+    const newCrop = fitCropToBounds(crop, bounds.width, bounds.height, aspect);
 
-    if (newH > originalImage.naturalHeight) {
-      newH = originalImage.naturalHeight;
-      newW = newH * targetAspect;
-    }
-    if (newW > originalImage.naturalWidth) {
-      newW = originalImage.naturalWidth;
-      newH = newW / targetAspect;
-    }
-
-    const newX = Math.max(0, Math.min(crop.x, originalImage.naturalWidth - newW));
-    const newY = Math.max(0, Math.min(crop.y, originalImage.naturalHeight - newH));
-
-    set({
-      selectedPreset: preset,
-      crop: { x: newX, y: newY, width: newW, height: newH }
-    });
+    set({ selectedPreset: preset, crop: newCrop });
   },
 
   setCustomSize: (w, h, unit) => {
@@ -191,31 +204,60 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   flipH: false,
   flipV: false,
   setCrop: (crop) => set({ crop }),
-  rotate90: (dir) => {
+
+  rotate90: (dir = 'cw') => {
     get().pushHistorySnapshot();
     const current = get().rotation;
     const next = dir === 'cw' ? (current + 90) % 360 : (current - 90 + 360) % 360;
-    set({ rotation: next });
+    const img = get().originalImage;
+
+    if (img) {
+      const bounds = getTransformedDimensions(img.naturalWidth, img.naturalHeight, next);
+      const aspect = get().selectedPreset.widthMm / get().selectedPreset.heightMm;
+      const newCrop = fitCropToBounds(get().crop, bounds.width, bounds.height, aspect);
+      set({ rotation: next, crop: newCrop });
+    } else {
+      set({ rotation: next });
+    }
   },
-  setRotation: (deg) => set({ rotation: deg }),
+
+  setRotation: (deg) => {
+    const img = get().originalImage;
+    if (img) {
+      const bounds = getTransformedDimensions(img.naturalWidth, img.naturalHeight, deg);
+      const aspect = get().selectedPreset.widthMm / get().selectedPreset.heightMm;
+      const newCrop = fitCropToBounds(get().crop, bounds.width, bounds.height, aspect);
+      set({ rotation: deg, crop: newCrop });
+    } else {
+      set({ rotation: deg });
+    }
+  },
+
   toggleFlipH: () => {
     get().pushHistorySnapshot();
     set((s) => ({ flipH: !s.flipH }));
   },
+
   toggleFlipV: () => {
     get().pushHistorySnapshot();
     set((s) => ({ flipV: !s.flipV }));
   },
+
   resetTransform: () => {
     get().pushHistorySnapshot();
-    set({ rotation: 0, flipH: false, flipV: false });
+    const img = get().originalImage;
+    if (img) {
+      const aspect = get().selectedPreset.widthMm / get().selectedPreset.heightMm;
+      const newCrop = fitCropToBounds(get().crop, img.naturalWidth, img.naturalHeight, aspect);
+      set({ rotation: 0, flipH: false, flipV: false, crop: newCrop });
+    } else {
+      set({ rotation: 0, flipH: false, flipV: false });
+    }
   },
 
   adjustments: { ...DEFAULT_LIGHTING },
   setAdjustment: (key, val) =>
-    set((s) => ({
-      adjustments: { ...s.adjustments, [key]: val }
-    })),
+    set((s) => ({ adjustments: { ...s.adjustments, [key]: val } })),
   setAllAdjustments: (adj) => {
     get().pushHistorySnapshot();
     set({ adjustments: adj });
@@ -229,7 +271,7 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   border: {
     enabled: false,
     color: '#000000',
-    widthMm: 0.1,
+    widthMm: 1,
     style: 'solid',
     radiusMm: 0,
     paddingMm: 0
@@ -286,7 +328,6 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   undo: () => {
     const { history, future } = get();
     if (history.length === 0) return;
-
     const previous = history[history.length - 1];
     const s = get();
     const currentSnap: EditorSnapshot = {
@@ -298,7 +339,6 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
       backgroundColor: s.backgroundColor,
       border: { ...s.border }
     };
-
     set({
       crop: previous.crop,
       rotation: previous.rotation,
@@ -314,7 +354,6 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   redo: () => {
     const { history, future } = get();
     if (future.length === 0) return;
-
     const next = future[0];
     const s = get();
     const currentSnap: EditorSnapshot = {
@@ -326,7 +365,6 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
       backgroundColor: s.backgroundColor,
       border: { ...s.border }
     };
-
     set({
       crop: next.crop,
       rotation: next.rotation,

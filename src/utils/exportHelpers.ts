@@ -5,6 +5,53 @@ import { applyLightingAdjustments } from './imageFilters';
 import { PhotoCellPosition } from './gridCalculator';
 
 /**
+ * Calculates the exact bounding box width and height for any rotation angle.
+ */
+export const getTransformedDimensions = (width: number, height: number, rotation: number) => {
+  const rad = (rotation * Math.PI) / 180;
+  const boxW = Math.abs(width * Math.cos(rad)) + Math.abs(height * Math.sin(rad));
+  const boxH = Math.abs(width * Math.sin(rad)) + Math.abs(height * Math.cos(rad));
+  return { width: Math.round(boxW), height: Math.round(boxH) };
+};
+
+/**
+ * Renders the source image with rotation and flips baked in.
+ */
+export const createTransformedSourceCanvas = (
+  image: HTMLImageElement,
+  rotation: number,
+  flipH: boolean,
+  flipV: boolean
+): HTMLCanvasElement => {
+  const { width: boxW, height: boxH } = getTransformedDimensions(
+    image.naturalWidth,
+    image.naturalHeight,
+    rotation
+  );
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, boxW);
+  canvas.height = Math.max(1, boxH);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((rotation * Math.PI) / 180);
+  ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+  ctx.drawImage(
+    image,
+    -image.naturalWidth / 2,
+    -image.naturalHeight / 2,
+    image.naturalWidth,
+    image.naturalHeight
+  );
+  ctx.restore();
+
+  return canvas;
+};
+
+/**
  * Render single edited photo to high-resolution Canvas at precise target DPI.
  */
 export const renderSinglePhotoCanvas = async (
@@ -17,7 +64,7 @@ export const renderSinglePhotoCanvas = async (
   dpi: DPI,
   adjustments: LightingAdjustments,
   border: BorderSettings,
-  backgroundColor: string // 'transparent' or hex
+  backgroundColor: string
 ): Promise<HTMLCanvasElement> => {
   const canvas = document.createElement('canvas');
   const targetWidthPx = mmToPixels(preset.widthMm, dpi);
@@ -28,13 +75,13 @@ export const renderSinglePhotoCanvas = async (
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D context unavailable');
 
-  // Fill background
+  // 1. Fill background
   if (backgroundColor !== 'transparent') {
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, targetWidthPx, targetHeightPx);
   }
 
-  // Calculate borders and paddings in pixels
+  // 2. Calculate borders and paddings in pixels
   const borderWidthPx = border.enabled ? mmToPixels(border.widthMm, dpi) : 0;
   const paddingPx = border.enabled ? mmToPixels(border.paddingMm, dpi) : 0;
   const radiusPx = border.enabled ? mmToPixels(border.radiusMm, dpi) : 0;
@@ -44,51 +91,39 @@ export const renderSinglePhotoCanvas = async (
   const photoAreaW = Math.max(1, targetWidthPx - 2 * (borderWidthPx + paddingPx));
   const photoAreaH = Math.max(1, targetHeightPx - 2 * (borderWidthPx + paddingPx));
 
-  // Save context for clipping and transformation
   ctx.save();
-
-  // Rounded corner clipping for photo area
   if (radiusPx > 0) {
     drawRoundedRectPath(ctx, photoAreaX, photoAreaY, photoAreaW, photoAreaH, radiusPx);
     ctx.clip();
   }
 
-  // Temporary canvas to process crop, flip, rotate and lighting
+  // 3. Bake rotation and flips into an intermediate source canvas
+  const transformedSource = createTransformedSourceCanvas(image, rotation, flipH, flipV);
+
+  // 4. Crop from the transformed source into the target photo area
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = photoAreaW;
   tempCanvas.height = photoAreaH;
   const tCtx = tempCanvas.getContext('2d');
 
   if (tCtx) {
-    tCtx.save();
-    tCtx.translate(photoAreaW / 2, photoAreaH / 2);
-    tCtx.rotate((rotation * Math.PI) / 180);
-    tCtx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+    const sx = Math.max(0, Math.min(crop.x, transformedSource.width - 1));
+    const sy = Math.max(0, Math.min(crop.y, transformedSource.height - 1));
+    const sw = Math.min(crop.width, transformedSource.width - sx);
+    const sh = Math.min(crop.height, transformedSource.height - sy);
 
-    // Draw source cropped segment scaled into target photo area
-    tCtx.drawImage(
-      image,
-      crop.x,
-      crop.y,
-      crop.width,
-      crop.height,
-      -photoAreaW / 2,
-      -photoAreaH / 2,
-      photoAreaW,
-      photoAreaH
-    );
-    tCtx.restore();
+    tCtx.drawImage(transformedSource, sx, sy, sw, sh, 0, 0, photoAreaW, photoAreaH);
 
-    // Bake lighting adjustments directly into pixels
+    // 5. Bake lighting filters
     applyLightingAdjustments(tCtx, photoAreaW, photoAreaH, adjustments);
 
-    // Draw baked photo onto main canvas
+    // 6. Composite onto main canvas
     ctx.drawImage(tempCanvas, photoAreaX, photoAreaY);
   }
 
   ctx.restore();
 
-  // Draw border stroke if enabled
+  // 7. Draw border stroke if enabled
   if (border.enabled && borderWidthPx > 0) {
     ctx.save();
     ctx.strokeStyle = border.color;
@@ -158,11 +193,10 @@ export const renderLayoutSheetCanvas = async (
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D context unavailable');
 
-  // Print paper background is always white
+  // Sheet paper is white
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, sheetWidthPx, sheetHeightPx);
 
-  // Render each photo cell at exact coordinates
   for (const cell of cells) {
     const xPx = mmToPixels(cell.xMm, dpi);
     const yPx = mmToPixels(cell.yMm, dpi);
@@ -171,7 +205,6 @@ export const renderLayoutSheetCanvas = async (
 
     ctx.drawImage(singlePhotoCanvas, xPx, yPx, wPx, hPx);
 
-    // Cutting guides (trim marks) around each photo
     if (showCuttingGuides) {
       drawCropMarks(ctx, xPx, yPx, wPx, hPx, mmToPixels(2.5, dpi));
     }
@@ -189,7 +222,7 @@ const drawCropMarks = (
   markLength: number
 ) => {
   ctx.save();
-  ctx.strokeStyle = '#9ca3af'; // light gray guides
+  ctx.strokeStyle = '#9ca3af';
   ctx.lineWidth = 1;
   ctx.setLineDash([]);
 
@@ -228,19 +261,15 @@ const drawCropMarks = (
   ctx.restore();
 };
 
-/**
- * File downloader helper with Blob URL cleanup.
- */
 export const downloadCanvasFile = (
   canvas: HTMLCanvasElement,
   format: ExportFormat,
   filename: string,
   quality = 0.95
 ) => {
-  if (format === 'pdf') return; // Handled separately by exportToPdf
+  if (format === 'pdf') return;
 
   const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
-
   canvas.toBlob(
     (blob) => {
       if (!blob) return;
@@ -258,9 +287,6 @@ export const downloadCanvasFile = (
   );
 };
 
-/**
- * Export to PDF preserving 100% true physical millimeter scale.
- */
 export const exportToPdf = (
   canvas: HTMLCanvasElement,
   widthMm: number,

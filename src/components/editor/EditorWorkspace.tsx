@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { usePhotoStore } from '../../store/usePhotoStore';
 import { applyLightingAdjustments } from '../../utils/imageFilters';
+import { getTransformedDimensions } from '../../utils/exportHelpers';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 export const EditorWorkspace: React.FC = () => {
@@ -20,11 +21,9 @@ export const EditorWorkspace: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Zoom & Pan state
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Touch tracking for pinch-to-zoom
   const touchState = useRef<{
     initialDist: number;
     initialZoom: number;
@@ -39,47 +38,61 @@ export const EditorWorkspace: React.FC = () => {
     isPinching: false
   });
 
-  // Crop Dragging state
   const [isDraggingCrop, setIsDraggingCrop] = useState(false);
   const [dragHandle, setDragHandle] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [initialCrop, setInitialCrop] = useState(crop);
 
-  // Render baked preview onto canvas
+  // Active transformed dimensions of the source image
+  const transformedDim = originalImage
+    ? getTransformedDimensions(originalImage.naturalWidth, originalImage.naturalHeight, rotation)
+    : { width: 1, height: 1 };
+
+  // Render transformed canvas
   const renderPreview = useCallback(() => {
     if (!originalImage || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.width = originalImage.naturalWidth;
-    canvas.height = originalImage.naturalHeight;
+    const { width: boxW, height: boxH } = getTransformedDimensions(
+      originalImage.naturalWidth,
+      originalImage.naturalHeight,
+      rotation
+    );
+
+    canvas.width = boxW;
+    canvas.height = boxH;
 
     ctx.save();
     if (backgroundColor !== 'transparent') {
       ctx.fillStyle = backgroundColor;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, boxW, boxH);
     }
 
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.translate(boxW / 2, boxH / 2);
     ctx.rotate((rotation * Math.PI) / 180);
     ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-    ctx.drawImage(originalImage, -canvas.width / 2, -canvas.height / 2);
+    ctx.drawImage(
+      originalImage,
+      -originalImage.naturalWidth / 2,
+      -originalImage.naturalHeight / 2,
+      originalImage.naturalWidth,
+      originalImage.naturalHeight
+    );
     ctx.restore();
 
-    applyLightingAdjustments(ctx, canvas.width, canvas.height, adjustments);
+    applyLightingAdjustments(ctx, boxW, boxH, adjustments);
   }, [originalImage, rotation, flipH, flipV, adjustments, backgroundColor]);
 
   useEffect(() => {
     renderPreview();
   }, [renderPreview]);
 
-  // Helper distance between two touches
   const getDistance = (t1: React.Touch, t2: React.Touch) => {
     return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
   };
 
-  // Helper midpoint between two touches
   const getMidpoint = (t1: React.Touch, t2: React.Touch) => {
     return {
       x: (t1.clientX + t2.clientX) / 2,
@@ -87,10 +100,8 @@ export const EditorWorkspace: React.FC = () => {
     };
   };
 
-  // Touch Handlers for Multi-Touch Pinch & Pan
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      // Begin 2-finger pinch
       e.preventDefault();
       const dist = getDistance(e.touches[0], e.touches[1]);
       const mid = getMidpoint(e.touches[0], e.touches[1]);
@@ -101,7 +112,6 @@ export const EditorWorkspace: React.FC = () => {
         midpoint: mid,
         isPinching: true
       };
-      // Cancel crop drag if two fingers are down
       setIsDraggingCrop(false);
       setDragHandle(null);
     }
@@ -118,7 +128,6 @@ export const EditorWorkspace: React.FC = () => {
         const newZoom = Math.min(3.5, Math.max(0.5, touchState.current.initialZoom * scaleFactor));
         setZoom(newZoom);
 
-        // Adjust pan with touch movement
         const deltaX = newMid.x - touchState.current.midpoint.x;
         const deltaY = newMid.y - touchState.current.midpoint.y;
         setPan({
@@ -135,7 +144,6 @@ export const EditorWorkspace: React.FC = () => {
     }
   };
 
-  // Crop manipulation handlers
   const handlePointerDown = (e: React.PointerEvent, handle: string | null) => {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -149,16 +157,16 @@ export const EditorWorkspace: React.FC = () => {
     if (!isDraggingCrop || !originalImage || !containerRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    const scaleX = originalImage.naturalWidth / rect.width;
-    const scaleY = originalImage.naturalHeight / rect.height;
+    const scaleX = transformedDim.width / rect.width;
+    const scaleY = transformedDim.height / rect.height;
 
     const deltaX = (e.clientX - dragStart.x) * scaleX;
     const deltaY = (e.clientY - dragStart.y) * scaleY;
     const targetAspect = selectedPreset.widthMm / selectedPreset.heightMm;
 
     if (dragHandle === 'move') {
-      const maxX = originalImage.naturalWidth - initialCrop.width;
-      const maxY = originalImage.naturalHeight - initialCrop.height;
+      const maxX = transformedDim.width - initialCrop.width;
+      const maxY = transformedDim.height - initialCrop.height;
       setCrop({
         ...crop,
         x: Math.max(0, Math.min(maxX, initialCrop.x + deltaX)),
@@ -168,12 +176,12 @@ export const EditorWorkspace: React.FC = () => {
       let newW = Math.max(80, initialCrop.width + deltaX);
       let newH = newW / targetAspect;
 
-      if (initialCrop.x + newW > originalImage.naturalWidth) {
-        newW = originalImage.naturalWidth - initialCrop.x;
+      if (initialCrop.x + newW > transformedDim.width) {
+        newW = transformedDim.width - initialCrop.x;
         newH = newW / targetAspect;
       }
-      if (initialCrop.y + newH > originalImage.naturalHeight) {
-        newH = originalImage.naturalHeight - initialCrop.y;
+      if (initialCrop.y + newH > transformedDim.height) {
+        newH = transformedDim.height - initialCrop.y;
         newW = newH * targetAspect;
       }
 
@@ -204,52 +212,53 @@ export const EditorWorkspace: React.FC = () => {
 
   if (!originalImage) return null;
 
-  const cropLeftPct = (crop.x / originalImage.naturalWidth) * 100;
-  const cropTopPct = (crop.y / originalImage.naturalHeight) * 100;
-  const cropWidthPct = (crop.width / originalImage.naturalWidth) * 100;
-  const cropHeightPct = (crop.height / originalImage.naturalHeight) * 100;
+  // Normalized crop percentages over transformed dimensions
+  const cropLeftPct = (crop.x / transformedDim.width) * 100;
+  const cropTopPct = (crop.y / transformedDim.height) * 100;
+  const cropWidthPct = (crop.width / transformedDim.width) * 100;
+  const cropHeightPct = (crop.height / transformedDim.height) * 100;
 
   return (
     <div
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="relative w-full h-full flex flex-col items-center justify-center p-2 bg-zinc-950 select-none overflow-hidden touch-none"
+      className="relative w-full h-full flex flex-col items-center justify-center p-2 bg-gray-200 dark:bg-zinc-950 select-none overflow-hidden touch-none transition-colors duration-200"
     >
       {/* Floating Zoom Controls */}
-      <div className="absolute top-3 right-3 z-20 flex items-center bg-zinc-900/80 backdrop-blur border border-zinc-700/60 rounded-lg p-1 space-x-1 shadow-lg">
+      <div className="absolute top-3 right-3 z-20 flex items-center bg-white/90 dark:bg-zinc-900/80 text-gray-800 dark:text-zinc-200 backdrop-blur border border-gray-300 dark:border-zinc-700/60 rounded-lg p-1 space-x-1 shadow-lg">
         <button
           onClick={() => setZoom((z) => Math.max(0.5, z - 0.2))}
-          className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded"
+          className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded"
           title="Zoom out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <span className="text-[11px] font-mono font-medium text-zinc-300 px-1">
+        <span className="text-[11px] font-mono font-medium px-1">
           {Math.round(zoom * 100)}%
         </span>
         <button
           onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))}
-          className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded"
+          className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded"
           title="Zoom in"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
         <button
           onClick={resetZoomAndPan}
-          className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded"
+          className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded"
           title="Reset View"
         >
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Two-finger instruction hint on mobile */}
-      <div className="absolute top-3 left-3 z-20 pointer-events-none md:hidden bg-zinc-900/70 backdrop-blur text-[10px] text-zinc-400 px-2 py-1 rounded-md border border-zinc-800">
+      {/* Two-finger touch hint on mobile */}
+      <div className="absolute top-3 left-3 z-20 pointer-events-none md:hidden bg-white/80 dark:bg-zinc-900/70 backdrop-blur text-[10px] text-gray-600 dark:text-zinc-400 px-2 py-1 rounded-md border border-gray-300 dark:border-zinc-800 shadow-sm">
         ✌️ Pinch with 2 fingers to zoom
       </div>
 
-      {/* Main Canvas + Crop Area */}
+      {/* Main Transformed Canvas + Crop Selection */}
       <div
         ref={containerRef}
         onPointerMove={handlePointerMove}
@@ -265,7 +274,7 @@ export const EditorWorkspace: React.FC = () => {
           className="max-w-full max-h-[75vh] md:max-h-[70vh] object-contain rounded block"
         />
 
-        {/* Backdrop Mask */}
+        {/* Outer Backdrop Mask */}
         <div className="absolute inset-0 pointer-events-none">
           <div
             style={{
@@ -275,7 +284,7 @@ export const EditorWorkspace: React.FC = () => {
           />
         </div>
 
-        {/* Crop Selection Frame */}
+        {/* Active Crop Frame */}
         <div
           onPointerDown={(e) => handlePointerDown(e, 'move')}
           style={{
@@ -288,7 +297,7 @@ export const EditorWorkspace: React.FC = () => {
           }}
           className="absolute border-2 cursor-move shadow-outline touch-none"
         >
-          {/* Rule of Thirds */}
+          {/* Rule of Thirds Grid */}
           <div className="w-full h-full grid grid-cols-3 grid-rows-3 pointer-events-none opacity-40">
             <div className="border-r border-b border-white/60" />
             <div className="border-r border-b border-white/60" />
@@ -301,7 +310,7 @@ export const EditorWorkspace: React.FC = () => {
             <div />
           </div>
 
-          {/* Large Touch-friendly Corner Resize Handle */}
+          {/* Corner Resize Handle */}
           <div
             onPointerDown={(e) => handlePointerDown(e, 'se')}
             className="absolute -bottom-3 -right-3 w-7 h-7 bg-brand-500 border-2 border-white rounded-full cursor-se-resize shadow-lg flex items-center justify-center hover:scale-110 active:scale-125 transition-transform touch-none"
