@@ -86,10 +86,10 @@ export const LayoutSidebar: React.FC = () => {
         <div className="flex items-center space-x-2">
           <input
             type="number"
-            min={1}
+            min={0}
             max={grid.maxCapacity || 50}
             value={layout.duplicateCount}
-            onChange={(e) => setLayout({ duplicateCount: parseInt(e.target.value, 10) || 1 })}
+            onChange={(e) => setLayout({ duplicateCount: parseInt(e.target.value, 10) || 0 })}
             className="w-full px-3 py-2 text-xs bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg font-mono font-bold"
           />
           <span className="text-gray-500 dark:text-zinc-400 whitespace-nowrap">

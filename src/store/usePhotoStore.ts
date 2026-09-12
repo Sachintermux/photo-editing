@@ -293,7 +293,7 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
     customPageHeightMm: 297,
     orientation: 'portrait',
     dpi: 300,
-    duplicateCount: 8,
+    duplicateCount: 6,
     spacingHorizontalMm: 5,
     spacingVerticalMm: 5,
     marginTopMm: 10,
