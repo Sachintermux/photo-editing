@@ -23,7 +23,7 @@ export const LayoutWorkspace: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Zoom & Pan state
-  const [zoom, setZoom] = useState(0.7);
+  const [zoom, setZoom] = useState(0.3);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Touch tracking for 2-finger pinch-to-zoom & pan
@@ -35,7 +35,7 @@ export const LayoutWorkspace: React.FC = () => {
     isPinching: boolean;
   }>({
     initialDist: 0,
-    initialZoom: 0.7,
+    initialZoom: 0.3,
     initialPan: { x: 0, y: 0 },
     midpoint: { x: 0, y: 0 },
     isPinching: false
@@ -178,7 +178,7 @@ export const LayoutWorkspace: React.FC = () => {
   };
 
   const resetZoomAndPan = () => {
-    setZoom(0.7);
+    setZoom(0.3);
     setPan({ x: 0, y: 0 });
   };
 
