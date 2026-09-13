@@ -27,10 +27,10 @@ export const BackgroundPanel: React.FC = () => {
     if (!originalImage || !imageSrc) return;
 
     try {
-      setIsAiRemovingBg(true, 'Initializing AI engine...', 5);
+      setIsAiRemovingBg(true, 'Initializing AI engine on background thread...', 5, 12);
 
       const transparentBlob = await removeBackgroundAI(imageSrc, (p) => {
-        setIsAiRemovingBg(true, p.status, p.progress);
+        setIsAiRemovingBg(true, p.status, p.progress, p.eta);
       });
 
       const url = URL.createObjectURL(transparentBlob);
@@ -43,7 +43,7 @@ export const BackgroundPanel: React.FC = () => {
     } catch (err) {
       console.error(err);
       alert(
-        'AI background removal was interrupted or took too long. Check your internet connection for the initial download, or choose a solid background color from the presets below.'
+        'AI background removal was interrupted. Please check your network connection for the initial model download, or pick a background color below.'
       );
       setIsAiRemovingBg(false);
     }
@@ -64,7 +64,7 @@ export const BackgroundPanel: React.FC = () => {
           {isAiRemovingBg ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Processing with AI...</span>
+              <span>Processing on Background Thread...</span>
             </>
           ) : (
             <>

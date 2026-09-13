@@ -33,6 +33,7 @@ interface PhotoStoreState {
   isAiRemovingBg: boolean;
   bgRemovalProgress: number;
   bgRemovalStatus: string;
+  bgRemovalEta: number | null;
   setImage: (img: HTMLImageElement, src: string) => void;
   resetProject: () => void;
 
@@ -65,7 +66,7 @@ interface PhotoStoreState {
   border: BorderSettings;
   setBackgroundColor: (color: string) => void;
   setBorder: (border: Partial<BorderSettings>) => void;
-  setIsAiRemovingBg: (val: boolean, status?: string, progress?: number) => void;
+  setIsAiRemovingBg: (val: boolean, status?: string, progress?: number, eta?: number | null) => void;
 
   layout: LayoutSettings;
   setLayout: (settings: Partial<LayoutSettings>) => void;
@@ -77,7 +78,6 @@ interface PhotoStoreState {
   pushHistorySnapshot: () => void;
 }
 
-// Adjusts crop rectangle to remain within valid transformed canvas bounds
 const fitCropToBounds = (
   currentCrop: CropRect,
   boundsW: number,
@@ -120,6 +120,7 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   isAiRemovingBg: false,
   bgRemovalProgress: 0,
   bgRemovalStatus: '',
+  bgRemovalEta: null,
 
   setImage: (img, src) => {
     const targetAspect = DEFAULT_PRESET.widthMm / DEFAULT_PRESET.heightMm;
@@ -271,7 +272,7 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   border: {
     enabled: false,
     color: '#000000',
-    widthMm: 0.1,
+    widthMm: 1,
     style: 'solid',
     radiusMm: 0,
     paddingMm: 0
@@ -284,8 +285,14 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
     get().pushHistorySnapshot();
     set((s) => ({ border: { ...s.border, ...b } }));
   },
-  setIsAiRemovingBg: (val, status = '', progress = 0) =>
-    set({ isAiRemovingBg: val, bgRemovalStatus: status, bgRemovalProgress: progress }),
+
+  setIsAiRemovingBg: (val, status = '', progress = 0, eta = null) =>
+    set({
+      isAiRemovingBg: val,
+      bgRemovalStatus: status,
+      bgRemovalProgress: progress,
+      bgRemovalEta: eta
+    }),
 
   layout: {
     pageSizeId: DEFAULT_PAGE_SIZE.id,
@@ -293,7 +300,7 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
     customPageHeightMm: 297,
     orientation: 'portrait',
     dpi: 300,
-    duplicateCount: 6,
+    duplicateCount: 8,
     spacingHorizontalMm: 5,
     spacingVerticalMm: 5,
     marginTopMm: 10,

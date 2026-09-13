@@ -13,14 +13,13 @@ import { SingleExportModal } from './components/export/SingleExportModal';
 import { LayoutWorkspace } from './components/layout/LayoutWorkspace';
 import { LayoutSidebar } from './components/layout/LayoutSidebar';
 import { LayoutExportModal } from './components/layout/LayoutExportModal';
-import { Crop, Sliders, RefreshCw, Palette, Square, Download, ChevronUp, ChevronDown } from 'lucide-react';
 import { AiLoadingModal } from './components/common/AiLoadingModal';
+import { Crop, Sliders, RefreshCw, Palette, Square, Download, ChevronUp, ChevronDown } from 'lucide-react';
 
 type EditorTab = 'size' | 'adjust' | 'transform' | 'background' | 'border';
 type SheetPosition = 'collapsed' | 'half' | 'expanded';
 
 export const App: React.FC = () => {
-  // Theme state with localStorage persistence
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
@@ -111,6 +110,9 @@ export const App: React.FC = () => {
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-gray-100 dark:bg-zinc-950 font-sans transition-colors duration-200">
       <Header darkMode={darkMode} setDarkMode={setDarkMode} />
       <StepperNav />
+
+      {/* Global Non-Blocking Background Worker Modal */}
+      <AiLoadingModal />
 
       <main className="flex-1 overflow-hidden relative flex flex-col">
         {/* STEP 1: Upload */}
