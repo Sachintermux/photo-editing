@@ -421,7 +421,7 @@ export const PassportCameraModal: React.FC<PassportCameraModalProps> = ({
               className="p-3 rounded-full bg-zinc-800/80 text-white hover:bg-zinc-700 active:rotate-180 transition-transform duration-300"
               title="Switch Front/Back Camera"
             >
-              <SwitchCamera className="w-5 h-5" />
+              <SwitchCamera className="w-10 h-10" />
             </button>
           )}
         </div>

@@ -271,7 +271,7 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   border: {
     enabled: false,
     color: '#000000',
-    widthMm: 1,
+    widthMm: 0.1,
     style: 'solid',
     radiusMm: 0,
     paddingMm: 0
