@@ -1,9 +1,7 @@
 import { AutoModel, AutoProcessor, RawImage, env } from '@huggingface/transformers';
 
-// Configure transformers to load models from Hugging Face CDN without local fs lookups
 env.allowLocalModels = false;
 
-// Cache loaded model and processor instances in memory so repeat clicks are instant
 let cachedModel: any = null;
 let cachedProcessor: any = null;
 
@@ -12,6 +10,9 @@ export interface BgRemovalProgress {
   progress: number;
 }
 
+// Helper to yield control back to the browser UI to allow rendering and animation frames
+const yieldToMain = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export const removeBackgroundAI = async (
   imageSource: HTMLImageElement | string,
   onProgress?: (p: BgRemovalProgress) => void
@@ -19,9 +20,10 @@ export const removeBackgroundAI = async (
   try {
     const modelId = 'briaai/RMBG-1.4';
 
-    // 1. Initialize or retrieve cached RMBG-1.4 model
+    // 1. Initialize Processor and Model
     if (!cachedModel || !cachedProcessor) {
-      onProgress?.({ status: 'Downloading RMBG-1.4 studio AI model...', progress: 15 });
+      onProgress?.({ status: 'Connecting to AI model repository...', progress: 8 });
+      await yieldToMain(50);
 
       cachedProcessor = await AutoProcessor.from_pretrained(modelId, {
         config: {
@@ -38,63 +40,86 @@ export const removeBackgroundAI = async (
         },
       });
 
+      onProgress?.({ status: 'Downloading AI model weights (~43MB)...', progress: 15 });
+      await yieldToMain(50);
+
       cachedModel = await AutoModel.from_pretrained(modelId, {
-        // Will use WebGPU when available on Chrome/Edge, else WASM
         device: 'webgpu' in navigator ? 'webgpu' : 'wasm',
         progress_callback: (info: any) => {
           if (info.status === 'progress' && info.total) {
+            const loadedMb = (info.loaded / 1024 / 1024).toFixed(1);
+            const totalMb = (info.total / 1024 / 1024).toFixed(1);
             const pct = Math.round((info.loaded / info.total) * 60) + 15;
+
             onProgress?.({
-              status: `Downloading AI weights: ${Math.round(info.loaded / 1024 / 1024)}MB`,
-              progress: Math.min(80, pct),
+              status: `Downloading AI weights: ${loadedMb} MB / ${totalMb} MB`,
+              progress: Math.min(75, pct),
             });
           }
         },
       });
     }
 
-    onProgress?.({ status: 'Processing portrait alpha matte...', progress: 85 });
+    onProgress?.({ status: 'Model loaded. Preparing image...', progress: 78 });
+    await yieldToMain(50);
 
-    // 2. Load and preprocess input image
+    // 2. Preprocess source image
     const sourceUrl = typeof imageSource === 'string' ? imageSource : imageSource.src;
-    const rawImage = await RawImage.fromURL(sourceUrl);
+    let rawImage = await RawImage.fromURL(sourceUrl);
+
+    // Limit maximum dimension to 2048px to prevent WebAssembly memory crashes on mobile
+    const maxDim = 2048;
+    if (rawImage.width > maxDim || rawImage.height > maxDim) {
+      const scale = maxDim / Math.max(rawImage.width, rawImage.height);
+      const newW = Math.round(rawImage.width * scale);
+      const newH = Math.round(rawImage.height * scale);
+      rawImage = await rawImage.resize(newW, newH);
+    }
+
+    onProgress?.({ status: 'Detecting subject and fine hair strands...', progress: 85 });
+    await yieldToMain(60);
+
     const { pixel_values } = await cachedProcessor(rawImage);
 
-    // 3. Predict high-fidelity alpha matte
+    onProgress?.({ status: 'Generating studio-grade alpha matte...', progress: 92 });
+    await yieldToMain(60);
+
+    // 3. Neural Net inference
     const { output } = await cachedModel({ input: pixel_values });
 
-    // 4. Resize predicted alpha matte to original image dimensions
+    onProgress?.({ status: 'Applying clean transparent edges...', progress: 97 });
+    await yieldToMain(40);
+
+    // 4. Resize mask to original image dimensions
     const mask = await RawImage.fromTensor(
       output[0].mul(255).to('uint8')
     ).resize(rawImage.width, rawImage.height);
 
-    // 5. Apply soft alpha matte directly to canvas pixels
+    // 5. Apply matte to canvas pixels
     const canvas = document.createElement('canvas');
     canvas.width = rawImage.width;
     canvas.height = rawImage.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas context unavailable');
 
-    // Draw original image
     ctx.drawImage(rawImage.toCanvas() as CanvasImageSource, 0, 0);
 
-    // Inject sub-pixel alpha channel values
     const imgData = ctx.getImageData(0, 0, rawImage.width, rawImage.height);
     const data = imgData.data;
     const maskData = mask.data;
 
     for (let i = 0; i < maskData.length; i++) {
-      data[i * 4 + 3] = maskData[i]; // Alpha channel
+      data[i * 4 + 3] = maskData[i]; // alpha channel
     }
 
     ctx.putImageData(imgData, 0, 0);
-    onProgress?.({ status: 'Complete!', progress: 100 });
+    onProgress?.({ status: 'Done! Applying background...', progress: 100 });
+    await yieldToMain(30);
 
-    // 6. Return PNG blob
     return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
         if (blob) resolve(blob);
-        else reject(new Error('Failed to create transparent PNG blob'));
+        else reject(new Error('Failed to generate transparent PNG blob'));
       }, 'image/png');
     });
   } catch (err) {

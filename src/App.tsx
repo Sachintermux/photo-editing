@@ -14,6 +14,7 @@ import { LayoutWorkspace } from './components/layout/LayoutWorkspace';
 import { LayoutSidebar } from './components/layout/LayoutSidebar';
 import { LayoutExportModal } from './components/layout/LayoutExportModal';
 import { Crop, Sliders, RefreshCw, Palette, Square, Download, ChevronUp, ChevronDown } from 'lucide-react';
+import { AiLoadingModal } from './components/common/AiLoadingModal';
 
 type EditorTab = 'size' | 'adjust' | 'transform' | 'background' | 'border';
 type SheetPosition = 'collapsed' | 'half' | 'expanded';

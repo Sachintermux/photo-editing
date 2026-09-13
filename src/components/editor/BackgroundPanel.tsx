@@ -11,25 +11,24 @@ export const BackgroundPanel: React.FC = () => {
     backgroundColor,
     setBackgroundColor,
     isAiRemovingBg,
-    bgRemovalProgress,
-    bgRemovalStatus,
     setIsAiRemovingBg
   } = usePhotoStore();
 
   const colorPresets = [
     { name: 'Transparent', value: 'transparent' },
-    { name: 'Pure White (US/EU Standard)', value: '#FFFFFF' },
+    { name: 'Pure White (Passport Standard)', value: '#FFFFFF' },
     { name: 'Light Blue (Visa Standard)', value: '#cce5ff' },
     { name: 'Off-White / Light Gray', value: '#f0f0f0' },
     { name: 'Royal Blue', value: '#1e3a8a' },
-    { name: 'Red (China Passport/Job)', value: '#dc2626' }
+    { name: 'Red (Official/Job Standard)', value: '#dc2626' }
   ];
 
   const handleAiRemove = async () => {
     if (!originalImage || !imageSrc) return;
 
     try {
-      setIsAiRemovingBg(true, 'Initializing open-source AI model...', 10);
+      setIsAiRemovingBg(true, 'Initializing AI engine...', 5);
+
       const transparentBlob = await removeBackgroundAI(imageSrc, (p) => {
         setIsAiRemovingBg(true, p.status, p.progress);
       });
@@ -42,8 +41,9 @@ export const BackgroundPanel: React.FC = () => {
       };
       newImg.src = url;
     } catch (err) {
+      console.error(err);
       alert(
-        'In-browser AI background removal is processing in compatibility mode or model is loading. If it takes too long, you can use white background flattening.'
+        'AI background removal was interrupted or took too long. Check your internet connection for the initial download, or choose a solid background color from the presets below.'
       );
       setIsAiRemovingBg(false);
     }
@@ -56,37 +56,23 @@ export const BackgroundPanel: React.FC = () => {
           AI Background Isolation
         </label>
         <button
+          type="button"
           onClick={handleAiRemove}
           disabled={isAiRemovingBg}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-50"
+          className="w-full flex items-center justify-center space-x-2 py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50"
         >
           {isAiRemovingBg ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>{bgRemovalStatus || 'Processing...'}</span>
+              <span>Processing with AI...</span>
             </>
           ) : (
             <>
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>Remove Background with Open-Source AI</span>
+              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+              <span>Remove Background with AI</span>
             </>
           )}
         </button>
-
-        {isAiRemovingBg && (
-          <div className="mt-2.5 space-y-1">
-            <div className="w-full bg-gray-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-              <div
-                className="bg-brand-600 h-full transition-all duration-300"
-                style={{ width: `${bgRemovalProgress}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[11px] text-gray-400">
-              <span>{bgRemovalStatus}</span>
-              <span>{bgRemovalProgress}%</span>
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="pt-2 border-t border-gray-200 dark:border-zinc-800">
@@ -136,7 +122,7 @@ export const BackgroundPanel: React.FC = () => {
             value={backgroundColor}
             placeholder="#FFFFFF or transparent"
             onChange={(e) => setBackgroundColor(e.target.value)}
-            className="flex-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md font-mono"
+            className="flex-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md font-mono text-gray-800 dark:text-zinc-200"
           />
         </div>
       </div>
